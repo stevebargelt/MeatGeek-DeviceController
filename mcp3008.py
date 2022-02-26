@@ -7,12 +7,13 @@ import time
 import math
 
 spi = busio.SPI(clock=board.SCK, MISO=board.MISO, MOSI=board.MOSI)
-cs = digitalio.DigitalInOut(board.D5)
+cs = digitalio.DigitalInOut(board.D7)
 mcp = MCP.MCP3008(spi, cs)
 chan0 = AnalogIn(mcp, MCP.P0)
 chan1 = AnalogIn(mcp, MCP.P1)
 chan2 = AnalogIn(mcp, MCP.P2)
 chan3 = AnalogIn(mcp, MCP.P3)
+chan4 = AnalogIn(mcp, MCP.P4)
 
 def getresistance(adcValue):
   rtdV = (adcValue / 1023) * 3.3
@@ -33,9 +34,13 @@ def gettemp(resistance):
 
 while True:
   print('Raw ADC Value chan0: ', chan0.value)
-#   print('ADC Voltage: ' + str(chan0.voltage) + 'V')  
-  res = getresistance(chan0.value)
-  print('Resistance chan0: ', res)
+  print('Raw ADC Value chan1: ', chan1.value)
+  print('Raw ADC Value chan2: ', chan2.value)
+  print('Raw ADC Value chan3: ', chan3.value)
+  print('Raw ADC Value chan4: ', chan4.value)
+#   print('ADC Voltage: ' + str(chan0.voltage) + 'V')
+#   res = getresistance(chan0.value)
+#   print('Resistance chan0: ', res)
 #   print('Temp?? chan0: ', gettemp(abs(res)))
 #   print('Raw ADC Value chan1: ', chan1.value)
 #   print('Raw ADC Value chan2: ', chan2.value)

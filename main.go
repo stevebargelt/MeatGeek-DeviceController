@@ -1,30 +1,64 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"html"
+	"log"
 	"math"
+	"net/http"
 	"strconv"
 	"time"
 
+	dc_i2c "github.com/davecheney/i2c"
 	queue "github.com/stevebargelt/MeatGeek-DeviceController/goqueue"
-	"gobot.io/x/gobot"
-	"gobot.io/x/gobot/drivers/spi"
-	"gobot.io/x/gobot/platforms/raspi"
+	gobot "github.com/stevebargelt/mygobot"
+	"github.com/stevebargelt/mygobot/api"
+	"github.com/stevebargelt/mygobot/drivers/spi"
+	"github.com/stevebargelt/mygobot/platforms/raspi"
 )
 
 func main() {
+
+        master := gobot.NewMaster()
+        deviceApi := api.NewAPI(master)
+        deviceApi.Port = "3000"
+
+        deviceApi.AddHandler(func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "Hello, %q \n", html.EscapeString(r.URL.Path))
+        })
+        deviceApi.Debug()
+        deviceApi.Start()
+
         a := raspi.NewAdaptor()
-		adc := spi.NewMCP3008Driver(a)
+		adc := spi.NewMCP3008Driver(a, a)
+
+
+        i, err := dc_i2c.New(0x27, 1)
+        check(err)
+        lcd, err := dc_i2c.NewLcd(i, 2, 1, 0, 4, 5, 6, 7, 3)
+        check(err)
+        lcd.BacklightOn()
+        lcd.Clear()
+        lcd.Home()
+        SetPosition(*lcd, 1, 0)
+        fmt.Fprint(lcd, "MeatGeek Temp")
+        SetPosition(*lcd, 2, 0)
+        fmt.Fprint(lcd, "Line 2")
+        SetPosition(*lcd, 3, 0)
+        fmt.Fprint(lcd, "Line 3")
+        SetPosition(*lcd, 4, 0)
+        fmt.Fprint(lcd, "Line 4")
+
         RTDs := []*RTD{}
         for i := 0; i<5 ;i++ {
             rtd := new(RTD)
-            rtd.title = "A" + strconv.Itoa(i)
+            rtd.title = "P" + strconv.Itoa(i)
             rtd.channel = i 
-            // rtd.tempsList = *list.New()
             rtd.resistanceQueue = *queue.New(100)
-            // rtd.Lock = &sync.Mutex{}
             RTDs = append(RTDs, rtd)
         }
+        RTDs[0].title = "Grill"
         RTDs[0].tempCorrection = -6.0
         RTDs[1].tempCorrection = -8.0
         RTDs[2].tempCorrection = 2.0
@@ -35,57 +69,53 @@ func main() {
                 gobot.Every(10*time.Millisecond, func() {
                 for _, rtd := range RTDs {
 		            result, err := adc.Read(rtd.channel)
+
                     if err != nil {
                         fmt.Println("ERROR: ", err.Error())
                     }
                     if result <=0 {
-                        //fmt.Printf("%s not connected\n", rtd.title)
-                        // rtd.tempsList.PushFront(0)
+                        //fmt.Printf("%s not connected. result = %d \n", rtd.title, result)
                         rtd.resistanceQueue.Push(0)
                     } else {
                         var resistance = GetResistance(result)
-                        // rtd.tempsList.PushFront(resistance)
                         rtd.resistanceQueue.Push(resistance)
-                        //fmt.Printf("%s resistance %f. List LEN = %d\n", rtd.title, resistance, rtd.tempsList.Len())
+                        //fmt.Printf("%s resistance %f\n", rtd.title, resistance)
                     }
-                    // for rtd.tempsList.Len() > 100 {
-                    //     rtd.Lock.Lock()
-                    //     rtd.tempsList.Remove(rtd.tempsList.Back())
-                    //     rtd.Lock.Unlock()
-                    // }
                 } 
 
                 })
-                gobot.Every(1000*time.Millisecond, func() {
+                gobot.Every(5000*time.Millisecond, func() {
                     for _, rtd := range RTDs {
-                        // rtd.Lock.Lock()
-                        
-                        // var sum float64 = 0.0
-                        //fmt.Printf("%s - len %d \n", rtd.title, rtd.tempsList.Len())
-                        // var counter = 0
-                        // for res := rtd.tempsList.Front(); res.Value != nil; res = res.Next() {
-                        //     counter++
-                        //     //fmt.Printf("%s resistance %f | Counter %d List Len %d\n", rtd.title, res.Value, counter, rtd.tempsList.Len())
-                        //     if res.Value != nil {
-                        //         sum += res.Value.(float64)
-                        //     }
-                        // }
-                        // resAverage := sum / float64(rtd.tempsList.Len())
-                        // rtd.Lock.Unlock()
-                        // sum := 0.0
-                        // queuelen := rtd.resistanceQueue.Len()
-                        // for {
-                        //     res := rtd.resistanceQueue.Pop()
-                        //     if res == nil {
-                        //         break
-                        //     }
-                        //     sum += res.(float64)
-                        // }
-                        // resAverageQueue := sum / float64(queuelen)
                         resAve := rtd.resistanceQueue.Average()
-                        fmt.Printf("resAverageQueue %f\n", resAve)
-                        fmt.Printf("%s Temp F %f\n", rtd.title, GetTempFahrenheitFromResistance(resAve) + rtd.tempCorrection)
+                        //fmt.Printf("resAverageQueue %f\n", resAve)
+                        if resAve >0 {
+                            rtd.temp = GetTempFahrenheitFromResistance(resAve) + rtd.tempCorrection
+                            //fmt.Printf("%s Temp F %f\n", rtd.title,rtd.temp)
+                            // SetPosition(*lcd, i, 0)
+                            //fmt.Fprint(lcd, rtd.title,"Temp F ", math.Round(rtd.temp))
+                        } else {
+                            //fmt.Printf("%s unplugged\n", rtd.title)
+                            //SetPosition(*lcd, i, 0)
+                            //fmt.Fprint(lcd, rtd.title, "Unplg")
+                        }
                     }
+                    left := fmt.Sprintf("%s %.0f F", RTDs[1].title, math.Round(RTDs[1].temp))
+                    right := fmt.Sprintf("%s %.0f F", RTDs[2].title, math.Round(RTDs[2].temp))
+                    line := justifyWithSpaces(left, right, 20)
+                    fmt.Println(line)
+                    fmt.Printf("Line1 len = %v\n", len(line))
+                    SetPosition(*lcd, 1, 0)
+                    fmt.Fprint(lcd, line)
+                    left = fmt.Sprintf("%s %.0f F", RTDs[3].title, math.Round(RTDs[3].temp))
+                    right = fmt.Sprintf("%s %.0f F", RTDs[4].title, math.Round(RTDs[4].temp))
+                    line = justifyWithSpaces(left, right, 20)
+                    fmt.Printf("Line2 len = %v\n", len(line))
+                    fmt.Println(line)
+                    SetPosition(*lcd, 2, 0)
+                    fmt.Fprint(lcd, justifyWithSpaces(left, right, 20))
+                    SetPosition(*lcd, 3, 0)
+                    fmt.Fprintf(lcd, "%s %.0f", RTDs[0].title, math.Round(RTDs[0].temp))
+
                 })                
         }
         robot := gobot.NewRobot("mcp3008bot",
@@ -93,8 +123,18 @@ func main() {
                 []gobot.Device{adc},
                 work,
         )
+        robot.AddCommand("get_temps", func(params map[string]interface{}) interface{} {
+            temps := []float64{}
+            for _, rtd := range RTDs {
+                temps = append(temps, rtd.temp)
+                //temps[i] = rtd.temp
+            }
+            return temps
+        })
 
-        robot.Start()
+        master.AddRobot(robot)
+        master.Start()
+        //robot.Start()
 }
 
 func GetResistance(adcValue int) (float64) {
@@ -114,8 +154,48 @@ func GetTempFahrenheitFromResistance(resistance float64) (float64) {
 type RTD struct {  
     title string
     channel int
-    // tempsList list.List
     resistanceQueue queue.Queue
     tempCorrection float64
-    // Lock *sync.Mutex
+    temp float64
+}
+
+func check(err error) {
+	if err != nil { log.Fatal(err) }
+}
+
+func SetPosition(lcd dc_i2c.Lcd, top, left int) (err error) {
+    const CMD_DDRAM_Set            = 0x80
+    ErrInvalidPosition := errors.New("invalid position value")
+    rowOffsets := []int{ 0, 64, 20, 84 }
+    rows := 4
+
+    if top < 1 || top > 4 {
+		err = ErrInvalidPosition
+		return
+	}
+    if left < 0 || left > 39 {
+		err = ErrInvalidPosition
+		return
+	}
+    var newAddress = left + rowOffsets[top-1];
+    if left < 0 || (rows == 1 && newAddress >= 80) || (rows > 1 && newAddress >=104) {
+        err = ErrInvalidPosition
+        return
+    }
+
+	lcd.Command(byte(CMD_DDRAM_Set | newAddress))
+    return nil
+}
+
+func justifyWithSpaces(string1, string2 string, maxChars int) (string) {
+    if len(string1) + len(string2) > maxChars {
+        if len(string1) > 10 {
+            string1 = string1[0:9]
+        }
+        if len(string2) > 10 {
+            string2 = string2[0:9]
+        }
+    }
+    spacesCount := maxChars - len(string2)
+    return (fmt.Sprintf("%-*v%v", spacesCount, string1, string2))
 }

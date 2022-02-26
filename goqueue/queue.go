@@ -1,6 +1,11 @@
 package goqueue
 
 import (
+	"fmt"
+	"log"
+	"math"
+	"reflect"
+	"strconv"
 	"sync"
 )
 
@@ -16,6 +21,9 @@ type Queue struct {
 	size, items int64
 	mutex       *sync.RWMutex
 }
+
+var floatType = reflect.TypeOf(float64(0))
+var stringType = reflect.TypeOf("")
 
 // Create a new queue
 // If the parameter size is passed, the queue will be of that fixed size
@@ -156,7 +164,11 @@ func (queue *Queue) Average() float64 {
 		if next == nil {
 			break
 		}
-		sum += next.data.(float64)
+		nextVal, err := getFloat(next.data)
+		if err != nil {
+			log.Fatal(err)
+		}
+		sum += nextVal
 		n = next
 		count++
 	}
@@ -165,4 +177,40 @@ func (queue *Queue) Average() float64 {
 	} else {
 		return 0
 	}
+}
+
+func getFloat(unk interface{}) (float64, error) {
+    switch i := unk.(type) {
+    case float64:
+        return i, nil
+    case float32:
+        return float64(i), nil
+    case int64:
+        return float64(i), nil
+    case int32:
+        return float64(i), nil
+    case int:
+        return float64(i), nil
+    case uint64:
+        return float64(i), nil
+    case uint32:
+        return float64(i), nil
+    case uint:
+        return float64(i), nil
+    case string:
+        return strconv.ParseFloat(i, 64)
+    default:
+        v := reflect.ValueOf(unk)
+        v = reflect.Indirect(v)
+        if v.Type().ConvertibleTo(floatType) {
+            fv := v.Convert(floatType)
+            return fv.Float(), nil
+        } else if v.Type().ConvertibleTo(stringType) {
+            sv := v.Convert(stringType)
+            s := sv.String()
+            return strconv.ParseFloat(s, 64)
+        } else {
+            return math.NaN(), fmt.Errorf("can't convert %v to float64", v.Type())
+        }
+    }
 }

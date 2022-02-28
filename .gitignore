@@ -20,5 +20,8 @@
 # Go workspace file
 go.work
 
+# Must be an artifact of VS Code remote (SSH) debugging
+__debug_bin
+
 # Executables on Mac/Linux
 MeatGeek-DeviceController

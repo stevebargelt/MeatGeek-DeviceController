@@ -116,6 +116,7 @@ func main() {
             fmt.Fprint(lcd, justifyWithSpaces(left, right, 20))
             SetPosition(*lcd, 3, 0)
             fmt.Fprint(lcd, formatTemp(RTDs[0].title, RTDs[0].temp))
+            fmt.Println(formatTemp(RTDs[0].title, RTDs[0].temp))
             SetPosition(*lcd, 4, 0)
             t := time.Now()
             fmt.Fprint(lcd, t.Format("Mon Jan 2 15:04"))
@@ -130,7 +131,6 @@ func main() {
         temps := []float64{}
         for _, rtd := range RTDs {
             temps = append(temps, rtd.temp)
-            //temps[i] = rtd.temp
         }
         return temps
     })

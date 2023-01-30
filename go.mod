@@ -6,7 +6,7 @@ require (
 	github.com/davecheney/i2c v0.0.0-20140823063045-caf08501bef2
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
-	github.com/stevebargelt/mygobot v1.6.0
+	gobot.io/x/gobot v1.16.0
 	periph.io/x/conn/v3 v3.6.10
 	periph.io/x/host/v3 v3.7.2
 )

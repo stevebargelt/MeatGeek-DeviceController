@@ -12,10 +12,11 @@ import (
 
 	dc_i2c "github.com/davecheney/i2c"
 	queue "github.com/stevebargelt/MeatGeek-DeviceController/goqueue"
-	gobot "github.com/stevebargelt/mygobot"
-	"github.com/stevebargelt/mygobot/api"
-	"github.com/stevebargelt/mygobot/drivers/spi"
-	"github.com/stevebargelt/mygobot/platforms/raspi"
+
+	"gobot.io/x/gobot"
+	"gobot.io/x/gobot/api"
+	"gobot.io/x/gobot/drivers/spi"
+	"gobot.io/x/gobot/platforms/raspi"
 )
 
 func main() {
@@ -31,7 +32,7 @@ func main() {
     deviceApi.Start()
 
     a := raspi.NewAdaptor()
-    adc := spi.NewMCP3008Driver(a, a)
+    adc := spi.NewMCP3008Driver(a)
 
     i, err := dc_i2c.New(0x27, 1)
     check(err)

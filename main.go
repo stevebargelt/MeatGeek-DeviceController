@@ -10,14 +10,33 @@ import (
 	"strconv"
 	"time"
 
+	//using this library for teh NaN support
+	"github.com/xhhuango/json"
+
 	dc_i2c "github.com/davecheney/i2c"
 	queue "github.com/stevebargelt/MeatGeek-DeviceController/goqueue"
 
+	// Check go.mod - using gobot.io/x/gobot v1.16.1-0.20230128112232-9ce45c005602
+	// fixes a bug with SPI interfaces and the API
+	// https://github.com/hybridgroup/gobot/issues/794
 	"gobot.io/x/gobot"
 	"gobot.io/x/gobot/api"
 	"gobot.io/x/gobot/drivers/spi"
 	"gobot.io/x/gobot/platforms/raspi"
 )
+
+var SmokerStatus = Status {
+    SmokerID: "meatgeek2",
+    AugerOn: false,
+    TTL: 200,
+    ID: "1",
+    SessionID: "",
+    BlowerOn: false,
+    IgniterOn: false, 
+    FireHealthy: true,
+    Mode: "test",
+    SetPoint: 200,
+}
 
 func main() {
 
@@ -62,7 +81,7 @@ func main() {
     
     // Ahh yes magic numbers. Every RTD circuit can report resistances differently
     // these are the corrected values that I've observed for MY system and circuits. 
-    // TODO: Allow these to be env vars or CLI flags. 
+    // TODO: Allow these to be env vars and/or CLI flags. 
     RTDs[0].tempCorrection = -6.0
     RTDs[1].tempCorrection = -8.0
     RTDs[2].tempCorrection = 2.0
@@ -91,18 +110,25 @@ func main() {
         gobot.Every(5000*time.Millisecond, func() {
             for _, rtd := range RTDs {
                 resAve := rtd.resistanceQueue.Average()
-                //fmt.Printf("resAverageQueue %f\n", resAve)
-                if resAve >0 {
+                fmt.Printf("%s resAverageQueue %f\n", rtd.title, resAve)
+                if !math.IsNaN(resAve) && resAve > 0.0 {
                     rtd.temp = GetTempFahrenheitFromResistance(resAve) + rtd.tempCorrection
-                    //fmt.Printf("%s Temp F %f\n", rtd.title,rtd.temp)
+                    // fmt.Printf("%s Temp F %f\n", rtd.title, rtd.temp)
                     // SetPosition(*lcd, i, 0)
-                    //fmt.Fprint(lcd, rtd.title,"Temp F ", math.Round(rtd.temp))
+                    // fmt.Fprint(lcd, rtd.title,"Temp F ", math.Round(rtd.temp))
                 } else {
-                    //fmt.Printf("%s unplugged\n", rtd.title)
-                    //SetPosition(*lcd, i, 0)
-                    //fmt.Fprint(lcd, rtd.title, "Unplg")
+                    // fmt.Printf("%s unplugged\n", rtd.title)
+                    // SetPosition(*lcd, i, 0)
+                    // fmt.Fprint(lcd, rtd.title, "Unplg")
                 }
             }
+            SmokerStatus.Temps.GrillTemp = RTDs[0].temp
+            SmokerStatus.Temps.Probe1Temp = RTDs[1].temp
+            SmokerStatus.Temps.Probe2Temp = RTDs[2].temp
+            SmokerStatus.Temps.Probe3Temp = RTDs[3].temp
+            SmokerStatus.Temps.Probe4Temp = RTDs[4].temp
+            SmokerStatus.CurrentTime = time.Now()
+
             left := formatTemp(RTDs[1].title, RTDs[1].temp)
             right := formatTemp(RTDs[2].title, RTDs[2].temp)
             line := justifyWithSpaces(left, right, 20)
@@ -123,22 +149,31 @@ func main() {
             fmt.Fprint(lcd, t.Format("Mon Jan 2 15:04"))
         })                
     }
-    robot := gobot.NewRobot("mcp3008bot",
+    robot := gobot.NewRobot("MeatGeekBot",
             []gobot.Connection{a},
             []gobot.Device{adc},
             work,
     )
     robot.AddCommand("get_temps", func(params map[string]interface{}) interface{} {
-        temps := []float64{}
-        for _, rtd := range RTDs {
-            temps = append(temps, rtd.temp)
+        res, err := json.Marshal(SmokerStatus.Temps)
+        if err != nil {
+            fmt.Println("ERROR: ", err.Error())
         }
-        return temps
+        return string(res)
+    })
+    
+    robot.AddCommand("get_status", func(params map[string]interface{}) interface{} {
+        res, err := json.Marshal(SmokerStatus)
+        if err != nil {
+            fmt.Println("ERROR: ", err.Error())
+        }
+        return string(res)
     })
 
     master.AddRobot(robot)
     master.Start()
 }
+
 
 func GetResistance(adcValue int) (float64) {
     var rtdV float64 = (float64(adcValue) / 1023) * 3.3
@@ -147,6 +182,7 @@ func GetResistance(adcValue int) (float64) {
 }
 
 func GetTempFahrenheitFromResistance(resistance float64) (float64) {
+    fmt.Printf("GetTempFahrenheitFromResistance: resistance=%f\n", resistance)
     var A float64 = 3.90830e-3 // Coefficient A
     var B float64 = -5.775e-7 // Coefficient B
     var ReferenceResistor float64 = 1000
@@ -208,9 +244,46 @@ func justifyWithSpaces(string1, string2 string, maxChars int) (string) {
 }
 
 func formatTemp(title string, temp float64) (string) {
-    if temp > 0 {
+    if temp > 0.0 {
         return fmt.Sprintf("%s %.0f F", title, math.Round(temp))
     } else {
         return fmt.Sprintf("%s unplg", title)
     }
+}
+
+// func handleRequests() {
+//     myRouter := mux.NewRouter().StrictSlash(true)
+//     // myRouter.HandleFunc("/", homePage)
+//     myRouter.HandleFunc("/status", returnStatus)
+//     log.Fatal(http.ListenAndServe(":8000", myRouter))
+// }
+
+// func returnStatus(w http.ResponseWriter, r *http.Request) {
+//     fmt.Println("Endpoint Hit: returnAllArticles")
+//     json.NewEncoder(w).Encode(smokerStatus)
+// }
+
+type Temps struct {
+	GrillTemp  float64 `json:"grillTemp"`
+	Probe1Temp float64 `json:"probe1Temp"`
+	Probe2Temp float64 `json:"probe2Temp"`
+	Probe3Temp float64 `json:"probe3Temp"`
+	Probe4Temp float64 `json:"probe4Temp"`
+}
+
+type Status struct {
+	ID           string     `json:"id"`
+	TTL          int        `json:"ttl"`
+	SmokerID     string     `json:"smokerid"`
+	SessionID    string     `json:"sessionid"`
+    Type         string     `json:"type"`
+	AugerOn      bool       `json:"augerOn"`
+	BlowerOn     bool       `json:"blowerOn"`
+	IgniterOn    bool       `json:"igniterOn"`
+	Temps        Temps      `json:"temps"`
+	FireHealthy  bool       `json:"fireHealthy"`
+	Mode         string     `json:"mode"`
+	SetPoint     int        `json:"setPoint"`
+	ModeTime     time.Time  `json:"modeTime"`
+	CurrentTime  time.Time  `json:"currentTime"`
 }

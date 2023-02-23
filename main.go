@@ -10,7 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	//using this library for teh NaN support
+    "github.com/newrelic/go-agent/v3/newrelic"
+
+	//using this library for the NaN support
 	"github.com/xhhuango/json"
 
 	dc_i2c "github.com/davecheney/i2c"
@@ -26,11 +28,9 @@ import (
 )
 
 var SmokerStatus = Status {
-    SmokerID: "meatgeek2",
+    SmokerID: "meatgeek3",
     AugerOn: false,
-    TTL: 200,
-    ID: "1",
-    SessionID: "",
+    TTL: 259200,
     BlowerOn: false,
     IgniterOn: false, 
     FireHealthy: true,
@@ -40,6 +40,11 @@ var SmokerStatus = Status {
 
 func main() {
 
+    app, err := newrelic.NewApplication(
+    newrelic.ConfigAppName("meatgeek-devicecontroller"),
+    newrelic.ConfigLicense("e8e8b2e9e51fbcb1d8c8a1729afe84426d73NRAL"),
+    newrelic.ConfigAppLogForwardingEnabled(true),
+)
     master := gobot.NewMaster()
     deviceApi := api.NewAPI(master)
     deviceApi.Port = "3000"
@@ -155,6 +160,8 @@ func main() {
             work,
     )
     robot.AddCommand("get_temps", func(params map[string]interface{}) interface{} {
+        txn := app.StartTransaction("get_temps")
+        defer txn.End()
         res, err := json.Marshal(SmokerStatus.Temps)
         if err != nil {
             fmt.Println("ERROR: ", err.Error())
@@ -163,6 +170,8 @@ func main() {
     })
     
     robot.AddCommand("get_status", func(params map[string]interface{}) interface{} {
+        txn := app.StartTransaction("get_status")
+        defer txn.End()
         res, err := json.Marshal(SmokerStatus)
         if err != nil {
             fmt.Println("ERROR: ", err.Error())
@@ -182,7 +191,7 @@ func GetResistance(adcValue int) (float64) {
 }
 
 func GetTempFahrenheitFromResistance(resistance float64) (float64) {
-    fmt.Printf("GetTempFahrenheitFromResistance: resistance=%f\n", resistance)
+    // fmt.Printf("GetTempFahrenheitFromResistance: resistance=%f\n", resistance)
     var A float64 = 3.90830e-3 // Coefficient A
     var B float64 = -5.775e-7 // Coefficient B
     var ReferenceResistor float64 = 1000
@@ -251,18 +260,6 @@ func formatTemp(title string, temp float64) (string) {
     }
 }
 
-// func handleRequests() {
-//     myRouter := mux.NewRouter().StrictSlash(true)
-//     // myRouter.HandleFunc("/", homePage)
-//     myRouter.HandleFunc("/status", returnStatus)
-//     log.Fatal(http.ListenAndServe(":8000", myRouter))
-// }
-
-// func returnStatus(w http.ResponseWriter, r *http.Request) {
-//     fmt.Println("Endpoint Hit: returnAllArticles")
-//     json.NewEncoder(w).Encode(smokerStatus)
-// }
-
 type Temps struct {
 	GrillTemp  float64 `json:"grillTemp"`
 	Probe1Temp float64 `json:"probe1Temp"`
@@ -275,7 +272,6 @@ type Status struct {
 	ID           string     `json:"id"`
 	TTL          int        `json:"ttl"`
 	SmokerID     string     `json:"smokerid"`
-	SessionID    string     `json:"sessionid"`
     Type         string     `json:"type"`
 	AugerOn      bool       `json:"augerOn"`
 	BlowerOn     bool       `json:"blowerOn"`

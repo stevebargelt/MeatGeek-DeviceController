@@ -1,0 +1,27 @@
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: "20 11 * * *"
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+
+    - name: Build
+      run: GOARCH=arm64 GOOS=linux go build -o MeatGeek-DeviceController main.go
+
+    # - name: Test
+    #   run: go test -v ./...

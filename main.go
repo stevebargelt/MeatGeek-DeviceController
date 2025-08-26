@@ -18,13 +18,11 @@ import (
 	dc_i2c "github.com/davecheney/i2c"
 	queue "github.com/stevebargelt/MeatGeek-DeviceController/goqueue"
 
-	// Check go.mod - using gobot.io/x/gobot v1.16.1-0.20230128112232-9ce45c005602
-	// fixes a bug with SPI interfaces and the API
-	// https://github.com/hybridgroup/gobot/issues/794
-	"gobot.io/x/gobot"
-	"gobot.io/x/gobot/api"
-	"gobot.io/x/gobot/drivers/spi"
-	"gobot.io/x/gobot/platforms/raspi"
+	// Updated to gobot.io/x/gobot/v2 for Go 1.25 compatibility
+	"gobot.io/x/gobot/v2"
+	"gobot.io/x/gobot/v2/api"
+	"gobot.io/x/gobot/v2/drivers/spi"
+	"gobot.io/x/gobot/v2/platforms/raspi"
 )
 
 var SmokerStatus = Status {
@@ -45,8 +43,8 @@ func main() {
     newrelic.ConfigLicense("e8e8b2e9e51fbcb1d8c8a1729afe84426d73NRAL"),
     newrelic.ConfigAppLogForwardingEnabled(true),
 )
-    master := gobot.NewMaster()
-    deviceApi := api.NewAPI(master)
+    manager := gobot.NewManager()
+    deviceApi := api.NewAPI(manager)
     deviceApi.Port = "3000"
 
     deviceApi.AddHandler(func(w http.ResponseWriter, r *http.Request) {
@@ -179,8 +177,10 @@ func main() {
         return string(res)
     })
 
-    master.AddRobot(robot)
-    master.Start()
+    manager.AddRobot(robot)
+    if err := manager.Start(); err != nil {
+        log.Fatal(err)
+    }
 }
 
 

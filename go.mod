@@ -7,7 +7,6 @@ require (
 	github.com/newrelic/go-agent/v3 v3.40.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.37.0
-	github.com/xhhuango/json v1.19.0
 	gobot.io/x/gobot/v2 v2.5.0
 	periph.io/x/conn/v3 v3.7.2
 	periph.io/x/host/v3 v3.8.3

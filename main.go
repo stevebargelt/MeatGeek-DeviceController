@@ -12,8 +12,8 @@ import (
 
     "github.com/newrelic/go-agent/v3/newrelic"
 
-	//using this library for the NaN support
-	"github.com/xhhuango/json"
+	//using standard json with custom NaN handling
+	"encoding/json"
 
 	dc_i2c "github.com/davecheney/i2c"
 	queue "github.com/stevebargelt/MeatGeek-DeviceController/goqueue"
@@ -282,4 +282,36 @@ type Status struct {
 	SetPoint     int        `json:"setPoint"`
 	ModeTime     time.Time  `json:"modeTime"`
 	CurrentTime  time.Time  `json:"currentTime"`
+}
+
+// MarshalJSON handles NaN values for Temps
+func (t Temps) MarshalJSON() ([]byte, error) {
+	type Alias Temps
+	temp := struct {
+		GrillTemp  interface{} `json:"grillTemp"`
+		Probe1Temp interface{} `json:"probe1Temp"`
+		Probe2Temp interface{} `json:"probe2Temp"`
+		Probe3Temp interface{} `json:"probe3Temp"`
+		Probe4Temp interface{} `json:"probe4Temp"`
+		Alias
+	}{
+		Alias: Alias(t),
+	}
+	
+	// Convert NaN values to null or string representation
+	temp.GrillTemp = handleNaN(t.GrillTemp)
+	temp.Probe1Temp = handleNaN(t.Probe1Temp)
+	temp.Probe2Temp = handleNaN(t.Probe2Temp)
+	temp.Probe3Temp = handleNaN(t.Probe3Temp)
+	temp.Probe4Temp = handleNaN(t.Probe4Temp)
+	
+	return json.Marshal(temp)
+}
+
+// handleNaN converts NaN to null for JSON compatibility
+func handleNaN(val float64) interface{} {
+	if math.IsNaN(val) || math.IsInf(val, 0) {
+		return nil // Will serialize as null
+	}
+	return val
 }
